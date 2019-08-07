@@ -26,14 +26,19 @@ if (fs.existsSync(DATA_PATH)) {
 // start scanning for a Hue bridge
 scanBridges()
 
-function saveUsername(name) {
-  data.hueUsername = name
+// cache data file to disk because we don't want lights to turn on if system reboots in middle of night
+function persistDataFile() {
   if (!isWriting) {
     isWriting = true
     fs.writeFile(DATA_PATH, JSON.stringify(data), function(err) {
       isWriting = false
     })
   }
+}
+
+function saveUsername(name) {
+  data.hueUsername = name
+  persistDataFile()
 }
 
 function sensorValChanged(sensorId, sensorName, occupied) {
@@ -41,16 +46,12 @@ function sensorValChanged(sensorId, sensorName, occupied) {
   
   data.sensorVals[sensorId] = occupied
   data.sensorNames[sensorName] = sensorId
-  if (!isWriting) {
-    isWriting = true
-    fs.writeFile(DATA_PATH, JSON.stringify(data), function(err) {
-      isWriting = false
-    })
-  }
+  persistDataFile()
 
   return true
 }
 
+// discover bridges via UPnP and N-UPnP
 function scanBridges() {
   if (!data.hueUsername) console.log("Press the Link button on the Hue bridge to put it in pairing mode!")
   console.log("Scanning for bridges...")
@@ -58,11 +59,14 @@ function scanBridges() {
     .then(validateBridges)
     .catch(error => {
       console.log(`An error occurred: ${error.message}`)
+      // wait 30 seconds and scan again
       setTimeout(scanBridges, 30000)
     })
 }
 
+// determine if bridge is actually accessible to us
 function validateBridges(bridges) {
+  // make sure device is online
   const promises = bridges.map(bridge => {
     return new huejay.Client({host: bridge.ip}).bridge.ping()
       .then(() => bridge.ip)
@@ -102,6 +106,7 @@ function validateBridges(bridges) {
   })
 }
 
+// check existing user or create new user if needed
 function authenticateUser(bridgeIp) {
   if (data.hueUsername && new huejay.Client({host: bridgeIp, username: data.hueUsername}).bridge.isAuthenticated()) {
     // we already know the user ID and it successfully authenticates
@@ -128,6 +133,7 @@ function authenticateUser(bridgeIp) {
     })
 }
 
+// clean out punctuation and spaces from room names
 function sanitizeName(str) {
   return str.replace(/[^\w\s_\-]/g, "").replace(/\s+/g, " ").trim().toLowerCase()
 }
@@ -157,10 +163,10 @@ function scanHiome(bridgeIp) {
           for (let group of groups) {
             if (sanitizeName(group.name) === sensorName) {
               group.on = /*isNight &&*/ occupied
-              hue.groups.save(group)
-              break
+              return hue.groups.save(group)
             }
           }
+          console.log("No Hue group found for", sensorName)
         })
         .catch(error => {
           console.log("Hue API Failure")
