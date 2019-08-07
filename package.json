@@ -1,0 +1,18 @@
+{
+  "name": "hiome-hue",
+  "version": "1.0.0",
+  "description": "Hue adapter for Hiome",
+  "main": "main.js",
+  "dependencies": {
+    "huejay": "^1.9.0",
+    "mqtt": "^3.0.0"
+  },
+  "scripts": {
+    "start": "node main.js"
+  },
+  "homepage": "https://github.com/hiome/hiome-hue",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/hiome/hiome-hue.git"
+  }
+}
