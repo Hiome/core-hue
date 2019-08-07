@@ -157,7 +157,7 @@ function scanHiome(bridgeIp) {
         .then(groups => {
           for (let group of groups) {
             if (sanitizeName(group.name) === sensorName) {
-              group.on = isNight && occupied
+              group.on = /*isNight &&*/ occupied
               hue.groups.save(group)
               break
             }

@@ -7,7 +7,7 @@ Integrate Hue with Hiome, and directly control Hue lights based on your Hiome oc
 1. `git clone https://github.com/Hiome/hiome-hue.git`
 2. `npm install`
 3. Push the link button on your Hue bridge to pair it with Hiome
-4. `node start`
+4. `npm start`
 
 ## Setup
 
