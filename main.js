@@ -6,8 +6,6 @@ const fs = require('fs');
 
 // persist Hue username and current state to disk so we can restore on restart
 const DATA_PATH = 'hue.json'
-// don't start a new scan while current one is ongoing
-let canScan = true
 // track day/night status
 let isNight = undefined
 // protect data file from being written simultaneously
@@ -25,9 +23,7 @@ if (fs.existsSync(DATA_PATH)) {
   data = JSON.parse(dataFile)
 }
 
-// scan every 30 seconds until we find a bridge
-const scanInterval = setInterval(scanBridges, 30000)
-// and start scanning for bridge immediately on launch
+// start scanning for a Hue bridge
 scanBridges()
 
 function saveUsername(name) {
@@ -56,13 +52,13 @@ function sensorValChanged(sensorId, sensorName, occupied) {
 }
 
 function scanBridges() {
-  if (!canScan) return
-  canScan = false
-  console.log("Scanning for bridges... Press the Link button on the Hue bridge if this is your first time running this script!")
+  if (!data.hueUsername) console.log("Press the Link button on the Hue bridge to put it in pairing mode!")
+  console.log("Scanning for bridges...")
   huejay.discover({strategy: 'all'})
     .then(validateBridges)
     .catch(error => {
       console.log(`An error occurred: ${error.message}`)
+      setTimeout(scanBridges, 30000)
     })
 }
 
@@ -74,10 +70,12 @@ function validateBridges(bridges) {
   })
 
   Promise.all(promises).then(pingables => {
-    const bridgesFrd = pingables.filter(x => x)
+    // remove duplicates and nulls
+    const bridgesFrd = [...new Set(pingables)].filter(x => x)
     if (bridgesFrd.length == 0) {
-      console.log("No hue bridges found...")
-      canScan = true
+      console.log("No hue bridges found... Trying again in 30 seconds")
+      // wait 30 seconds and scan again
+      setTimeout(scanBridges, 30000)
     } else if (bridgesFrd.length == 1) {
       authenticateUser(bridgesFrd[0])
     } else {
@@ -96,7 +94,8 @@ function validateBridges(bridges) {
         } else {
           // nope, can't authenticate with any of them :(
           console.log("Too many hue bridges found, I don't know what to do. Halp.")
-          canScan = true
+          // wait 30 seconds and scan again
+          setTimeout(scanBridges, 30000)
         }
       })
     }
@@ -120,11 +119,12 @@ function authenticateUser(bridgeIp) {
     })
     .catch(error => {
       if (error instanceof huejay.Error && error.type === 101)
-        console.log("Link button not pressed. Try again...")
+        console.log("Link button not pressed. Trying again in 30 seconds...")
       else
         console.log(error.stack)
 
-      canScan = true
+      // wait 30 seconds and scan again
+      setTimeout(scanBridges, 30000)
     })
 }
 
@@ -134,7 +134,6 @@ function sanitizeName(str) {
 
 // now we can finally get started...
 function scanHiome(bridgeIp) {
-  clearInterval(scanInterval)
   const hue = new huejay.Client({host: bridgeIp, username: data.hueUsername})
   const hiome = mqtt.connect('mqtt://hiome.local')
 
@@ -164,7 +163,8 @@ function scanHiome(bridgeIp) {
           }
         })
         .catch(error => {
-          console.log("Failed to fetch Hue groups")
+          console.log("Hue API Failure")
+          console.log(error.stack)
         })
     } else if (message['meta'] && message['meta']['type'] === 'solar' && message['meta']['name'] === 'Sun') {
       const wasNight = isNight
@@ -182,7 +182,8 @@ function scanHiome(bridgeIp) {
           }
         })
         .catch(error => {
-          console.log("Failed to fetch Hue groups")
+          console.log("Hue API Failure")
+          console.log(error.stack)
         })
     }
   })
