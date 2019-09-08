@@ -146,7 +146,7 @@ const hiome = mqtt.connect('mqtt://localhost')
 
 function publish(status) {
   if (status)
-    hiome.publish('_hiome/integrate/hue', {status, host: hue && hue.host}, {qos: 1, retain: true})
+    hiome.publish('_hiome/integrate/hue', JSON.stringify({status, host: hue && hue.host}), {qos: 1, retain: true})
   else
     hiome.publish('_hiome/integrate/hue', '', {retain: true})
 }
