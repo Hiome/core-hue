@@ -160,10 +160,10 @@ hiome.on('connect', function() {
 hiome.on('message', function(topic, msg, packet) {
   if (msg.length === 0) return
   if (topic === '_hiome/integrate/hue') {
-    if (msg === 'connect') connect()
-    else if (msg === 'disconnect') disconnect()
+    if (msg.toString() === 'connect') connect()
+    else if (msg.toString() === 'disconnect') disconnect()
   } else if (hue) {
-    const message = JSON.parse(msg)
+    const message = JSON.parse(msg.toString())
     if (message['meta'] && message['meta']['type'] === 'occupancy' && message['meta']['source'] === 'gateway') {
       const sensorId = message['meta']['room']
       const sensorName = sanitizeName(message['meta']['name'].replace('Occupancy', ''))
