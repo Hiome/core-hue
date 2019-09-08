@@ -142,7 +142,7 @@ function sanitizeName(str) {
   return str.replace(/[^\w\s_\-]/g, "").replace(/\s+/g, " ").trim().toLowerCase()
 }
 
-const hiome = mqtt.connect('mqtt://localhost')
+const hiome = mqtt.connect('mqtt://localhost:1883')
 
 function publish(status) {
   if (status)
