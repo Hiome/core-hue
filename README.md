@@ -11,7 +11,7 @@ Integrate Hue with Hiome, and directly control Hue lights based on your Hiome oc
 
 ## Setup
 
-This script assumes that you have only one Hue bridge on your network, and that you have Hue groups with the same name as the room in Hiome. For example, when "Bedroom" is occupied in Hiome, this script will attempt to turn on the "Bedroom" group in Hue. When the "Bedroom" is no longer occupied, it will turn off the "Bedroom" group.
+This script assumes that you have Hue groups with the same name as the room in Hiome. For example, when "Bedroom" is occupied in Hiome, this script will attempt to turn on the "Bedroom" group in Hue. When the "Bedroom" is no longer occupied, it will turn off the "Bedroom" group.
 
 ## TODO
 
