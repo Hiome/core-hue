@@ -17,6 +17,7 @@ const FAILURE          = 'fail'
 
 // track day/night status
 let isNight = undefined
+let onlyControlAtNight = true
 // protect data file from being written simultaneously
 let isWriting = false
 let hue = null
@@ -50,7 +51,7 @@ function saveUsername(name) {
 
 function sensorValChanged(sensorId, sensorName, occupied) {
   if (data.sensorVals[sensorId] === occupied) return false
-  
+
   data.sensorVals[sensorId] = occupied
   data.sensorNames[sensorName] = sensorId
   persistDataFile()
@@ -146,41 +147,41 @@ const hiome = mqtt.connect('mqtt://localhost:1883')
 
 function publish(status) {
   if (status)
-    hiome.publish('_hiome/integrate/hue', JSON.stringify({status, host: hue && hue.host}), {qos: 1, retain: true})
+    hiome.publish('_hiome/integrate/hue', JSON.stringify({status}), {qos: 1, retain: true})
   else
     hiome.publish('_hiome/integrate/hue', '', {retain: true})
 }
 
 hiome.on('connect', function() {
   hiome.subscribe('_hiome/integrate/hue', {qos: 1})
+  hiome.subscribe('_hiome/integrate/hue/settings/#', {qos: 1})
   hiome.subscribe('hiome/1/sensor/#', {qos: 1})
   connect() // connect to hue bridge now that we're ready
 })
 
-hiome.on('message', function(topic, msg, packet) {
-  if (msg.length === 0) return
+hiome.on('message', function(topic, m, packet) {
+  if (m.length === 0) return
+  const msg = m.toString()
   if (topic === '_hiome/integrate/hue') {
-    if (msg.toString() === 'connect') connect()
-    else if (msg.toString() === 'disconnect') disconnect()
-  } else if (hue) {
-    const message = JSON.parse(msg.toString())
+    if (msg === 'connect') connect()
+    else if (msg === 'disconnect') disconnect()
+  } else if (topic.startsWith('_hiome/integrate/hue/settings/')) {
+    if (topic.endsWith('onlyControlAtNight')) onlyControlAtNight = msg === 'true'
+  } else {
+    const message = JSON.parse(msg)
     if (message['meta'] && message['meta']['type'] === 'occupancy' && message['meta']['source'] === 'gateway') {
       const sensorId = message['meta']['room']
       const sensorName = sanitizeName(message['meta']['name'].replace('Occupancy', ''))
-      const occupied = message['val'] > 0 
+      const occupied = message['val'] > 0
 
       // only do something if the occupancy state of the room is changing
-      if (!sensorValChanged(sensorId, sensorName, occupied)) return
+      if (!sensorValChanged(sensorId, sensorName, occupied) || !hue) return
 
       hue.groups.getAll()
         .then(groups => {
           for (let group of groups) {
-            const santizedGroupName = sanitizeName(group.name)
-            if (isNight && santizedGroupName === sensorName) {
-              group.on = occupied
-              return hue.groups.save(group)
-            } else if (!isNight && santizedGroupName === `${sensorName} Daytime`) {
-              group.on = occupied
+            if (sanitizeName(group.name) === sensorName) {
+              group.on = (isNight || !onlyControlAtNight) && occupied
               return hue.groups.save(group)
             }
           }
@@ -189,17 +190,14 @@ hiome.on('message', function(topic, msg, packet) {
     } else if (message['meta'] && message['meta']['type'] === 'solar' && message['meta']['name'] === 'Sun') {
       const wasNight = isNight
       isNight = message['val'] === 'sunset'
-      if (wasNight === undefined || isNight === wasNight) return
+      if (wasNight === undefined || isNight === wasNight || !hue) return
 
       hue.groups.getAll()
         .then(groups => {
           for (let group of groups) {
             const santizedGroupName = sanitizeName(group.name)
-            if (isNight && santizedGroupName in data.sensorNames) {
-              group.on = data.sensorVals[data.sensorNames[santizedGroupName]]
-              return hue.groups.save(group)
-            } else if (!isNight && santizedGroupName in data.sensorNames.map(s => `${s} Daytime`)) {
-              group.on = data.sensorVals[data.sensorNames[santizedGroupName.replace(' Daytime', '')]]
+            if (santizedGroupName in data.sensorNames) {
+              group.on = (isNight || !onlyControlAtNight) && data.sensorVals[data.sensorNames[santizedGroupName]]
               return hue.groups.save(group)
             }
           }
