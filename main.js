@@ -30,7 +30,7 @@ let data = {
 
 // attempt to read previous data cache, if it exists
 if (fs.existsSync(DATA_PATH)) {
-  const dataFile = fs.readFileSync(DATA_PATH)
+  const dataFile = fs.readFileSync(DATA_PATH, {encoding: 'utf8'})
   data = {...data, ...JSON.parse(dataFile)}
 }
 
