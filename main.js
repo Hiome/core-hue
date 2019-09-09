@@ -129,7 +129,7 @@ function createUser(host) {
     })
     .catch(error => {
       if (error instanceof huejay.Error && error.type === 101)
-        return NO_LINK
+        return NO_LINK_PUSHED
       else {
         Sentry.captureException(error)
         return FAILURE
