@@ -8,7 +8,7 @@ const Sentry = require('@sentry/node')
 Sentry.init()
 
 // persist Hue username and current state to disk so we can restore on restart
-const DATA_PATH = '/data/hue.json'
+const DATA_PATH = '/data/hue/hue.json'
 
 const CONNECTED        = 'connected'
 const NO_BRIDGES_FOUND = 'no_bridges_found'
@@ -39,6 +39,7 @@ function persistDataFile() {
   if (!isWriting) {
     isWriting = true
     fs.writeFile(DATA_PATH, JSON.stringify(data), function(err) {
+      if (err) Sentry.captureException(err)
       isWriting = false
     })
   }
