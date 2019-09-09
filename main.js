@@ -186,7 +186,10 @@ hiome.on('message', function(topic, m, packet) {
         .then(groups => {
           for (let group of groups) {
             if (sanitizeName(group.name) === sensorName) {
-              group.on = (isNight || !onlyControlAtNight) && occupied
+              if (occupied && (isNight || !onlyControlAtNight))
+                group.on = true
+              else if (!occupied)
+                group.on = false
               return hue.groups.save(group)
             }
           }
