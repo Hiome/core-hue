@@ -159,10 +159,14 @@ hiome.on('connect', function() {
   connect() // connect to hue bridge now that we're ready
 })
 
+let debounceTimer = new Date()
+
 hiome.on('message', function(topic, m, packet) {
   if (m.length === 0) return
   const msg = m.toString()
   if (topic === '_hiome/integrate/hue') {
+    if (new Date() - debounceTimer < 15000) return // in case user has multiple tabs open auto-smashing connect
+    debounceTimer = new Date()
     if (msg === 'connect') connect()
     else if (msg === 'disconnect') disconnect()
   } else if (topic.startsWith('_hiome/integrate/hue/settings/')) {
