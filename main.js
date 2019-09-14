@@ -31,7 +31,12 @@ let data = {
 // attempt to read previous data cache, if it exists
 if (fs.existsSync(DATA_PATH)) {
   const dataFile = fs.readFileSync(DATA_PATH, {encoding: 'utf8'})
-  data = {...data, ...JSON.parse(dataFile)}
+  try {
+    data = {...data, ...JSON.parse(dataFile)}
+  } catch(e) {
+    Sentry.captureException(e)
+    Sentry.captureMessage(dataFile)
+  }
 }
 
 // cache data file to disk because we don't want lights to turn on if system reboots in middle of night
