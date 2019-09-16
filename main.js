@@ -198,20 +198,32 @@ hiome.on('message', function(topic, m, packet) {
               return hue.groups.save(group)
             }
           }
+          hiome.publish("hiome/1/log", JSON.stringify({
+            val: 'hue_group_not_found',
+            message: `Corresponding Hue group for ${sensorName} not found`,
+            'device_type': 'sensor',
+            'device_id': sensorId,
+            'level': 'debug',
+            'ts': new Date().getTime(),
+            'meta': {
+              'client_id': 'hue',
+              'source': 'Hue'
+            }
+          }))
         })
         .catch(error => Sentry.captureException(error))
     } else if (message['meta'] && message['meta']['type'] === 'solar' && message['meta']['name'] === 'Sun') {
       const wasNight = isNight
       isNight = message['val'] === 'sunset'
-      if (wasNight === undefined || isNight === wasNight || !hue) return
+      if (wasNight === undefined || isNight === wasNight || !hue || !isNight) return
 
       hue.groups.getAll()
         .then(groups => {
           for (let group of groups) {
             const santizedGroupName = sanitizeName(group.name)
             if (santizedGroupName in data.sensorNames) {
-              group.on = (isNight || !onlyControlAtNight) && data.sensorVals[data.sensorNames[santizedGroupName]]
-              return hue.groups.save(group)
+              group.on = data.sensorVals[data.sensorNames[santizedGroupName]]
+              hue.groups.save(group)
             }
           }
         })
