@@ -200,7 +200,7 @@ hiome.on('message', function(topic, m, packet) {
           }
           hiome.publish("hiome/1/log", JSON.stringify({
             val: 'hue_group_not_found',
-            message: `Corresponding Hue group for ${sensorName} not found`,
+            message: `Corresponding Hue group for ${sensorName} not found in ${groups.map(g => sanitizeName(g.name)).join()}.`,
             'device_type': 'sensor',
             'device_id': sensorId,
             'level': 'debug',
