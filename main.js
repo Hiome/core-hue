@@ -25,7 +25,8 @@ let hue = null
 let data = {
   hueUsername: null,
   sensorVals: {},
-  sensorNames: {}
+  sensorNames: {},
+  sensorNameById: {}
 }
 
 // attempt to read previous data cache, if it exists
@@ -55,14 +56,21 @@ function saveUsername(name) {
   persistDataFile()
 }
 
-function sensorValChanged(sensorId, sensorName, occupied) {
+function sensorValChanged(sensorId, occupied) {
   if (data.sensorVals[sensorId] === occupied) return false
 
   data.sensorVals[sensorId] = occupied
-  data.sensorNames[sensorName] = sensorId
   persistDataFile()
 
   return true
+}
+
+function updateSensorName(sensorId, sensorName) {
+  if (data.sensorNames[sensorName] !== sensorId) {
+    data.sensorNames[sensorName] = sensorId
+    data.sensorNameById[sensorId] = sensorName
+    persistDataFile()
+  }
 }
 
 function disconnect() {
@@ -153,15 +161,19 @@ const hiome = mqtt.connect('mqtt://localhost:1883')
 
 function publish(status) {
   if (status)
-    hiome.publish('_hiome/integrate/hue', JSON.stringify({status}), {qos: 1, retain: true})
+    hiome.publish('hs/1/com.hiome/hue/connected', JSON.stringify({val: status, ts: Date.now()}), {qos: 1, retain: true})
   else
-    hiome.publish('_hiome/integrate/hue', '', {retain: true})
+    hiome.publish('hs/1/com.hiome/hue/connected', '', {retain: true})
 }
 
 hiome.on('connect', function() {
+  hiome.subscribe('hs/1/+/+/to/com.hiome/hue/scan', {qos: 1})
+  hiome.subscribe('hs/1/com.hiome/hue/night_only', {qos: 1})
+  hiome.subscribe('hs/1/com.hiome/+/name', {qos: 1})
+  hiome.subscribe('hs/1/com.hiome/+/occupancy', {qos: 1})
+  hiome.subscribe('hs/1/com.hiome/sun/position', {qos: 1})
   hiome.subscribe('_hiome/integrate/hue', {qos: 1})
   hiome.subscribe('_hiome/integrate/hue/settings/#', {qos: 1})
-  hiome.subscribe('hiome/1/sensor/#', {qos: 1})
   connect() // connect to hue bridge now that we're ready
 })
 
@@ -169,65 +181,66 @@ let debounceTimer = new Date()
 
 hiome.on('message', function(topic, m, packet) {
   if (m.length === 0) return
+  const topic_parts = topic.split("/")
   const msg = m.toString()
-  if (topic === '_hiome/integrate/hue') {
+  const message = JSON.parse(msg)
+  if (topic_parts[4] === 'occupancy') {
+    const sensorId = topic_parts[3]
+    const occupied = message['val'] > 0
+
+    // only do something if the occupancy state of the room is changing
+    if (!sensorValChanged(sensorId, occupied) || !hue) return
+
+    const sensorName = data.sensorNameById[sensorId]
+    if (!sensorName) return
+
+    hue.groups.getAll()
+      .then(groups => {
+        for (let group of groups) {
+          if (sanitizeName(group.name) === sensorName) {
+            if (occupied && (isNight || !onlyControlAtNight))
+              group.on = true
+            else if (!occupied)
+              group.on = false
+            return hue.groups.save(group)
+          }
+        }
+  } else if (topic_parts[4] === 'name') {
+    const name = sanitizeName(message.val)
+    this.updateSensorName(topic_parts[3], name)
+  } else if (topic_parts[4] === 'position') {
+    const wasNight = isNight
+    isNight = message['val'] === 'sunset'
+    if (wasNight === undefined || isNight === wasNight || !hue || !isNight) return
+
+    hue.groups.getAll()
+      .then(groups => {
+        for (let group of groups) {
+          const santizedGroupName = sanitizeName(group.name)
+          if (santizedGroupName in data.sensorNames) {
+            group.on = data.sensorVals[data.sensorNames[santizedGroupName]]
+            hue.groups.save(group)
+          }
+        }
+      })
+      .catch(error => Sentry.captureException(error))
+  } else if (topic_parts[4] === 'night_only') {
+    onlyControlAtNight = message.val
+  } else if (topic_parts[7] === 'scan') {
+    if (new Date() - debounceTimer < 15000) return // in case user has multiple tabs open auto-smashing connect
+    debounceTimer = new Date()
+    message.val ? connect() : disconnect()
+  } else if (topic === '_hiome/integrate/hue') { // legacy branch
     if (new Date() - debounceTimer < 15000) return // in case user has multiple tabs open auto-smashing connect
     debounceTimer = new Date()
     if (msg === 'connect') connect()
     else if (msg === 'disconnect') disconnect()
-  } else if (topic.startsWith('_hiome/integrate/hue/settings/')) {
-    if (topic.endsWith('onlyControlAtNight')) onlyControlAtNight = msg === 'true'
-  } else {
-    const message = JSON.parse(msg)
-    if (message['meta'] && message['meta']['type'] === 'occupancy' && message['meta']['source'] === 'gateway') {
-      const sensorId = message['meta']['room']
-      const sensorName = sanitizeName(message['meta']['name'].replace('Occupancy', ''))
-      const occupied = message['val'] > 0
-
-      // only do something if the occupancy state of the room is changing
-      if (!sensorValChanged(sensorId, sensorName, occupied) || !hue) return
-
-      hue.groups.getAll()
-        .then(groups => {
-          for (let group of groups) {
-            if (sanitizeName(group.name) === sensorName) {
-              if (occupied && (isNight || !onlyControlAtNight))
-                group.on = true
-              else if (!occupied)
-                group.on = false
-              return hue.groups.save(group)
-            }
-          }
-          hiome.publish("hiome/1/log", JSON.stringify({
-            val: 'hue_group_not_found',
-            message: `Corresponding Hue group for ${sensorName} not found in ${groups.map(g => sanitizeName(g.name)).join()}.`,
-            'device_type': 'sensor',
-            'device_id': sensorId,
-            'level': 'debug',
-            'ts': new Date().getTime(),
-            'meta': {
-              'client_id': 'hue',
-              'source': 'Hue'
-            }
-          }))
-        })
-        .catch(error => Sentry.captureException(error))
-    } else if (message['meta'] && message['meta']['type'] === 'solar' && message['meta']['name'] === 'Sun') {
-      const wasNight = isNight
-      isNight = message['val'] === 'sunset'
-      if (wasNight === undefined || isNight === wasNight || !hue || !isNight) return
-
-      hue.groups.getAll()
-        .then(groups => {
-          for (let group of groups) {
-            const santizedGroupName = sanitizeName(group.name)
-            if (santizedGroupName in data.sensorNames) {
-              group.on = data.sensorVals[data.sensorNames[santizedGroupName]]
-              hue.groups.save(group)
-            }
-          }
-        })
-        .catch(error => Sentry.captureException(error))
+  } else if (topic.startsWith('_hiome/integrate/hue/settings/')) { // legacy branch
+    if (topic.endsWith('onlyControlAtNight')) {
+      onlyControlAtNight = msg === 'true'
+      // republish to new format
+      const payload = {val: onlyControlAtNight, ts: Date.now()}
+      hiome.publish('hs/1/com.hiome/hue/night_only', JSON.stringify(payload), {qos: 1, retain: true})
     }
   }
 })
