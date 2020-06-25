@@ -209,7 +209,7 @@ hiome.on('message', function(topic, m, packet) {
       .catch(error => Sentry.captureException(error))
   } else if (topic_parts[4] === 'name') {
     const name = sanitizeName(message.val)
-    this.updateSensorName(topic_parts[3], name)
+    updateSensorName(topic_parts[3], name)
   } else if (topic_parts[4] === 'position') {
     const wasNight = isNight
     isNight = message['val'] === 'sunset'
