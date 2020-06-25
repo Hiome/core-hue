@@ -241,6 +241,7 @@ hiome.on('message', function(topic, m, packet) {
       // republish to new format
       const payload = {val: onlyControlAtNight, ts: Date.now()}
       hiome.publish('hs/1/com.hiome/hue/night_only', JSON.stringify(payload), {qos: 1, retain: true})
+      hiome.publish(topic, '', {retain: true, qos: 1}) // clear old format
     }
   }
 })
