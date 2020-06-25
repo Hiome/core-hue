@@ -205,6 +205,8 @@ hiome.on('message', function(topic, m, packet) {
             return hue.groups.save(group)
           }
         }
+      })
+      .catch(error => Sentry.captureException(error))
   } else if (topic_parts[4] === 'name') {
     const name = sanitizeName(message.val)
     this.updateSensorName(topic_parts[3], name)
