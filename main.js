@@ -66,7 +66,7 @@ function sensorValChanged(sensorId, occupied) {
 }
 
 function updateSensorName(sensorId, sensorName) {
-  if (data.sensorNames[sensorName] !== sensorId) {
+  if (data.sensorNames[sensorName] !== sensorId || data.sensorNameById[sensorId] !== sensorName) {
     data.sensorNames[sensorName] = sensorId
     data.sensorNameById[sensorId] = sensorName
     persistDataFile()
