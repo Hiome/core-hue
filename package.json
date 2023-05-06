@@ -5,7 +5,7 @@
   "main": "main.js",
   "dependencies": {
     "huejay": "^1.9.0",
-    "mqtt": "^3.0.0",
+    "mqtt": "^4.3.7",
     "@sentry/node": "^5.6.2"
   },
   "scripts": {
